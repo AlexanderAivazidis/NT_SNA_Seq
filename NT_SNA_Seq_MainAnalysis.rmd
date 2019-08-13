@@ -113,17 +113,30 @@ dev.off()
 
 For now I did not remove any cells with high mitochondiral RNA count from the analysis, but in the future we can also choose to be more stringent.
 
-Another QC metric is the expression of TNF-alpha (as an apoptosis marker), which I checked for next and turned out to be 0 in all cells:
+Another QC metric is the expression of apoptosis marker, which I checked for next and turned out to be 0 in most cells:
 
 ```{r, include = TRUE, message = FALSE, warning = FALSE, cache = TRUE}
 
-tnfProp0 = data_NEB['ENSMUSG00000024401',]
-tnfProp1 = data_10xF['Tnf',]
-tnfProp2 = data_10xO['Tnf',]
+apoProp0 = colSums(data_NEB[c('ENSMUSG00000024401', 'ENSMUSG00000025408', 'ENSMUSG00000027712'),])/colSums(data_NEB)
+apoProp1 = colSums(data_10xF[c('Tnf', 'Ddit3', 'Anxa5'),])/colSums(data_10xF)
+apoProp2 = colSums(data_10xO[c('Tnf', 'Ddit3', 'Anxa5'),])/colSums(data_10xO)
 
-print(sum(tnfProp0))
-print(sum(tnfProp1))
-print(sum(tnfProp2))
+apoDataFrame = data.frame(apoProp = c(apoProp0, apoProp1, apoProp2),
+                         Run = c(rep('FFT4G_NEB', length(apoProp0)), rep('FFT4G_10x', length(apoProp1)), rep('OCT1_10x', length(apoProp2))))
+
+p0 <- ggplot(apoDataFrame, aes(x=Run, y=apoProp, fill = Run)) + 
+  scale_y_log10() +
+  geom_violin() + 
+  geom_jitter(shape=16, size = 0.45, width = 0.45, height = 0.05) +
+  stat_summary(fun.y=mean, geom="point", size=2, color="red") +
+  ylab('Apoptosis Gene RNA Counts Proportion') +
+  theme(axis.text=element_text(size=14),
+        axis.title=element_text(size=14,face="bold"),
+        legend.text=element_text(size=14))
+p0
+pdf(file = 'figures/apoptosisGeneCounts.pdf', width = 10, height = 10)
+p0
+dev.off()
 
 ```
 
@@ -138,7 +151,6 @@ genesDetected3 = colSums(data_NEB > 0)
 readsDetected1 = colSums(data_10xF)
 readsDetected2 = colSums(data_10xO)
 readsDetected3 = colSums(data_NEB)
-
 
 numberOfCells1 = length(genesDetected1)
 numberOfCells2 = length(genesDetected2)
@@ -201,6 +213,8 @@ Many of the simulated doublets actually have quite a low doublet score, this is 
 
 doublets_10xF = read.table('scrublet/FFT4G_10x_predicted_doublets.txt')
 doublets_10xO = read.table('scrublet/OCT1_10x_predicted_doublets.txt')
+doubletsScore_10xF = read.table('scrublet/FFT4G_10x_doublets_scores.txt')
+doubletsScore_10xO = read.table('scrublet/OCT1_10x_doublets_scores.txt')
 doubletsScore_NEB = read.table('scrublet/FFT4G_NEB_doublets_scores.txt')
 
 keep10xF = (doublets_10xF == 0)
@@ -210,6 +224,14 @@ keepNEB = (doubletsScore_NEB < 0.4 & keepNEBafterQC == 1)
 data_10xF_QC = data_10xF[, keep10xF]
 data_10xO_QC = data_10xO[, keep10xO]
 data_NEB_QC = data_NEB[, keepNEB]
+
+doubletsScore_10xF = doubletsScore_10xF[keep10xF]
+doubletsScore_10xO = doubletsScore_10xO[keep10xO]
+doubletsScore_NEB = doubletsScore_NEB[keepNEB]
+
+apoProp1 = apoProp1[keep10xF]
+apoProp2 = apoProp2[keep10xO]
+apoProp0 = apoProp0[keepNEB]
 
 ```
 
@@ -270,6 +292,14 @@ for (i in 1:length(visualCortex.list)) {
 visualCortex.list[[2]]$Log10mitoFraction = log(mtProp1,10)
 visualCortex.list[[3]]$Log10mitoFraction = log(mtProp2,10)
 visualCortex.list[[4]]$Log10mitoFraction = log(mtProp0,10)
+
+visualCortex.list[[2]]$doubletScore = doubletsScore_10xF
+visualCortex.list[[3]]$doubletScore = doubletsScore_10xO
+visualCortex.list[[4]]$doubletScore = doubletsScore_NEB
+
+visualCortex.list[[2]]$apoProp = apoProp1
+visualCortex.list[[3]]$apoProp = apoProp2
+visualCortex.list[[4]]$apoProp = apoProp0
 
 featureList = c('Slc30a3', 'Cux2', 'Rorb', 'Scnn1a',
                 'Sst', 'Lamp5', 'Ndnf', 'Vip', 'nFeature_RNA')
@@ -491,10 +521,14 @@ p15 = DimPlot(visualCortex.10xintegrated, reduction = "umap", group.by = "subtyp
 p16 = FeaturePlot(visualCortex.10xintegrated, feature = "nFeature_RNA", reduction = "umap", cols = c('yellow', 'red'))
 p17 = FeaturePlot(visualCortex.10xintegrated, feature = "subtypeScore", reduction = "umap", cols = c('yellow', 'red'))
 p18 = FeaturePlot(visualCortex.10xintegrated, feature = "Log10mitoFraction", reduction = "umap", cols = c('yellow', 'red'))
+p19 = FeaturePlot(visualCortex.10xintegrated, feature = "doubletScore", reduction = "umap", cols = c('yellow', 'red'))
+p20 = FeaturePlot(visualCortex.10xintegrated, feature = "apoProp", reduction = "umap", cols = c('yellow', 'red'))
 p15
 p16
 p17
 p18
+p19
+p20
 
 pdf(file = 'figures/UMAP_10x_subtypes.pdf', width = 10, height = 5)
 p15
@@ -508,6 +542,50 @@ dev.off()
 pdf(file = 'figures/UMAP_10x_Log10mitoFraction.pdf', width = 10, height = 5)
 p18
 dev.off()
+pdf(file = 'figures/UMAP_10x_doubletScore.pdf', width = 10, height = 5)
+p19
+dev.off()
+pdf(file = 'figures/UMAP_10x_apoProp.pdf', width = 10, height = 5)
+p20
+dev.off()
 ```
 
-The number of counts, classification scores and mitochondrial counts fraction are not strongly out of the expected range. So it may simply be that this is a further subcategory of glutamatergic_L5_PT neurons that is only present in the OCT samples. Isolating the cells in this cluster and looking at DE genes compared to the rest will be my next step.
+The number of counts, classification scores and mitochondrial counts fraction are not strongly out of the expected range. So it may simply be that this is a further subcategory of glutamatergic_L5_PT neurons that is only present in the OCT samples. Isolating the cells in this cluster and looking at DE genes compared to the other cells of the same type is the last step, where we find 274 differentially expressend genes, none of which show any suspicious enrichment for certain GO processes (e.g. apoptosis):
+
+```{r, include = TRUE, message = FALSE, warning = FALSE, cache = FALSE}
+
+oddCluster = p15$data[p15$data$UMAP_1 < -5 & p15$data$UMAP_1 > -10 & p15$data$UMAP_2 > -8 & p15$data$UMAP_2 < -5 & p15$data$subtype == 'Glutamatergic_L5_PT',]
+
+
+idents = rep('0', dim(visualCortex.10xintegrated)[2])
+names(idents) = colnames(visualCortex.10xintegrated)
+idents[visualCortex.10xintegrated$subtype == 'Glutamatergic_L5_PT'] = '1'
+idents[rownames(oddCluster)] = '2'
+Idents(visualCortex.10xintegrated) = idents
+
+cluster_markers <- FindMarkers(visualCortex.10xintegrated, ident.1 = '2', ident.2 = '1')
+cluster_markers = cluster_markers[cluster_markers$p_val < 0.01,]
+
+library(biomaRt)
+library(org.Mm.eg.db)
+library(topGO)
+
+all_genes <- rep(1, dim(visualCortex.10xintegrated)[2])
+names(all_genes) = rownames(visualCortex.10xintegrated)
+all_genes[rownames(cluster_markers)] = 0
+
+GOdata <- new("topGOdata", ontology = "BP", allGenes = all_genes, geneSel = function(p) p < 
+    0.05, description = "Test", annot = annFUN.org, mapping = "org.Mm.eg.db", 
+    ID = "symbol")
+
+resultFisher <- runTest(GOdata, algorithm = "classic", statistic = "fisher")
+tab = GenTable(GOdata, classicFisher = resultFisher, topNodes = 10)
+
+library(gridExtra)
+library(grid)
+d = as.data.frame(as.matrix(tab[,c(1,2,6)]))
+p = grid.table(d)
+p
+d
+
+```
