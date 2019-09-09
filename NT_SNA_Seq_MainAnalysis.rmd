@@ -589,3 +589,14 @@ p
 d
 
 ```
+
+Let's save the Seurat object used in this analysis, so we can easily load it in the future (although we need to ignore this one from commits to github because its too large):
+
+```{r, include = TRUE, message = FALSE, warning = FALSE, cache = FALSE}
+
+saveRDS(visualCortex.list, file = 'visualCortex_snSeq_SeuratObject.rds')
+
+```
+
+
+
