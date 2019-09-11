@@ -1,0 +1,69 @@
+---
+  title: "Gene Specific Bias Analysis"
+output:
+  html_document: default
+github_document: default
+---
+
+```{r include = FALSE}
+### Load data and packages
+
+require(Seurat)
+require(ggplot2)
+knitr::opts_chunk$set(fig.width=12, fig.height=8) 
+
+```
+In this script I check if neuropile specific genes tend to be depleted in Lauma's snSeq trial runs compared to single-cell sequencing data from the Allen Institute.
+
+Let's plot mean counts per gene in Allen's single-cell data and Lauma's 10x_FFT4G run against each other for the most common neuron subtype: Glutamatergic_L2/3_IT. Coloured in red, are neuropile specific genes from supplementary table 10 of this paper: https://www.sciencedirect.com/science/article/pii/S0896627312002863?via%3Dihub
+  
+```{r, include = FALSE, message = FALSE, warning = FALSE, cache = FALSE}
+
+visualCortex.list = readRDS('visualCortex_snSeq_SeuratObject.rds')
+
+
+temp = tempfile(fileext = ".xlsx")
+dataURL <- "https://ars.els-cdn.com/content/image/1-s2.0-S0896627312002863-mmc2.xlsx"
+download.file(dataURL, destfile=temp, mode='wb')
+tab <- readxl::read_excel(temp, sheet =10)
+neuropil_genes = unname(unlist(tab[10:2559,1]))
+rm(tab)
+
+cluster.averages.list = list()
+for (i in 1:length(visualCortex.list)){
+Idents(object = visualCortex.list[[i]]) <- visualCortex.list[[i]]$subtype
+cluster.averages.list[[i]] = AverageExpression(visualCortex.list[[i]], use.counts = TRUE)[[1]]
+}
+names(cluster.averages.list) = names(visualCortex.list)
+
+subset = c('Glutamatergic_L2/3_IT')
+
+for (i in 1:length(cluster.averages.list)){
+  gNames = rownames(cluster.averages.list[[i]])
+  cluster.averages.list[[i]] = cluster.averages.list[[i]][,subset]
+  names(cluster.averages.list[[i]]) = gNames
+}
+
+cluster.averages.matrix = sapply(cluster.averages.list, unlist)
+neuropil_binary = 1*(gNames %in% neuropil_genes)
+cluster.averages.matrix = cbind(cluster.averages.matrix, neuropil_binary)
+
+cluster.averages.matrix = cluster.averages.matrix[rank(-cluster.averages.matrix[,1]) < 6000, ]
+
+featurePlots = list()
+colnames(cluster.averages.matrix)[1:5] = c('Allen', 'FFT_10x', 'OCT_10x', 'NEB_FFT', 'Neuropil')
+for (i in 1:4){
+  message(i)
+  featurePlots[[i]]  = local({
+    i = i
+    p_temp = ggplot(as.data.frame(cluster.averages.matrix), aes(x = Allen, y = eval(parse(text = colnames(cluster.averages.matrix)[i])))) + 
+    geom_point(size = 0.001, aes(colour = factor(Neuropil))) + scale_y_log10() + scale_x_log10() + ylab(colnames(cluster.averages.matrix)[i])
+    print(p_temp)})
+}
+
+p = cowplot::plot_grid(featurePlots[[1]], featurePlots[[2]], featurePlots[[3]], featurePlots[[4]])
+p
+
+```
+
+Visually, based on these plots the list of neuropil genes is not depleted in Lauma's data.
